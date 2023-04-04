@@ -30,7 +30,7 @@ int create_server_socket() {
     return server_fd;
 }
 
-std::string handle_client_registration(int client_fd, std::unordered_set<std::string>& nicknames, int& client_count) {
+std::string handle_client_registration(int client_fd, std::unordered_set<std::string>& nicknames, int& client_count, int required_players, std::vector<pollfd>& fds) {
     char buffer[1024];
     ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     buffer[bytes_received] = '\0';
@@ -39,11 +39,19 @@ std::string handle_client_registration(int client_fd, std::unordered_set<std::st
     if (nicknames.find(nickname) == nicknames.end()) {
         nicknames.insert(nickname);
         client_count++;
-        return "Registration Completed Successfully. Number of clients: " + std::to_string(client_count);
+        std::string response = "Registration Completed Successfully. Number of clients: " + std::to_string(client_count);
+        if (client_count == required_players) {
+            response += "\nGame start";
+            for (size_t i = 1; i < fds.size(); ++i) {
+                send(fds[i].fd, "Game start", strlen("Game start") + 1, 0);
+            }
+        }
+        return response;
     } else {
         return "Nickname already exists. Please choose another nickname.";
     }
 }
+
 
 void broadcast_client_info(const std::vector<pollfd>& fds, const std::unordered_set<std::string>& nicknames, int client_count) {
     std::string client_info = "Current number of clients: " + std::to_string(client_count) + "\n";
@@ -60,6 +68,20 @@ void broadcast_client_info(const std::vector<pollfd>& fds, const std::unordered_
     }
 }
 
+int get_num_players_to_start() {
+    int num_players;
+    std::cout << "Enter the number of players required to start the game: ";
+    std::cin >> num_players;
+    return num_players;
+}
+
+void send_game_start_notification(const std::vector<pollfd>& fds) {
+    std::string game_start_message = "THE GAME IS STARTING";
+    for (size_t i = 1; i < fds.size(); ++i) {
+        send(fds[i].fd, game_start_message.c_str(), game_start_message.size() + 1, 0);
+    }
+}
+
 
 int main() {
     int server_fd = create_server_socket();
@@ -68,12 +90,15 @@ int main() {
 
     std::unordered_set<std::string> nicknames;
     int client_count = 0;
+    int num_players_to_start = get_num_players_to_start();
 
     std::vector<pollfd> fds;
     pollfd server_pollfd;
     server_pollfd.fd = server_fd;
     server_pollfd.events = POLLIN;
     fds.push_back(server_pollfd);
+
+    
 
     while (true) {
         poll(fds.data(), fds.size(), -1);
@@ -91,11 +116,11 @@ int main() {
 
         for (size_t i = 1; i < fds.size(); ++i) {
             if (fds[i].revents & POLLIN) {
-                std::string response = handle_client_registration(fds[i].fd, nicknames, client_count);
-                if (response == "Registration Completed Successfully. Number of clients: " + std::to_string(client_count)) {
-                    broadcast_client_info(fds, nicknames, client_count);
-                } else {
-                    send(fds[i].fd, response.c_str(), response.size() + 1, 0);
+                std::string response = handle_client_registration(fds[i].fd, nicknames, client_count, num_players_to_start, fds);
+                send(fds[i].fd, response.c_str(), response.size() + 1, 0);
+
+                if (client_count == num_players_to_start) {
+                    send_game_start_notification(fds);
                 }
             }
         }

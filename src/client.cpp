@@ -54,6 +54,9 @@ int main() {
             if (response == "Nickname already exists. Please choose another nickname.") {
                 nickname = get_nickname();
                 send(client_fd, nickname.c_str(), nickname.size() + 1, 0);
+            } else if (response == "Game start") {
+                // The game has started, handle the game logic here. 
+                // break; 
             }
         } else if (bytes_received == 0) {
             // If recv returns 0, it means that the server closed the connection.
