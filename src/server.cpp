@@ -45,7 +45,13 @@ std::string handle_client_registration(int client_fd, std::unordered_set<std::st
     }
 }
 
-void broadcast_client_info(const std::vector<pollfd>& fds, const std::unordered_set<std::string>& nicknames, int client_count, int required_players) {
+void broadcast_to_clients(const std::vector<pollfd>& fds, const std::string& message) {
+    for (size_t i = 1; i < fds.size(); ++i) {
+        send(fds[i].fd, message.c_str(), message.size() + 1, 0);
+    }
+}
+
+std::string get_client_info(const std::unordered_set<std::string>& nicknames, int client_count) {
     std::string client_info = "Current number of clients: " + std::to_string(client_count) + "\n";
     client_info += "Client nicknames: ";
 
@@ -54,15 +60,7 @@ void broadcast_client_info(const std::vector<pollfd>& fds, const std::unordered_
     }
     client_info = client_info.substr(0, client_info.size() - 2); // Remove trailing comma and space
     client_info += "\n";
-
-    if(client_count == required_players) {
-        client_info += "GAME START!!!\n";
-    }
-
-    for (size_t i = 1; i < fds.size(); ++i) {
-        send(fds[i].fd, client_info.c_str(), client_info.size() + 1, 0);
-    }
-
+    return client_info;; 
 }
 
 int max_number_of_players() {
@@ -105,7 +103,12 @@ int main() {
             if (fds[i].revents & POLLIN) {
                 std::string response = handle_client_registration(fds[i].fd, nicknames, client_count);
                 if (response == "Registration Completed Successfully. Number of clients: " + std::to_string(client_count)) {
-                    broadcast_client_info(fds, nicknames, client_count, required_players);
+                    std::string message = get_client_info(nicknames, client_count);
+                    if(client_count == required_players)
+                        message += "All players have joined. Game will start soon.\n";
+                    else
+                        message += "Waiting for more players to join.\n";
+                    broadcast_to_clients(fds, message);
                 } else {
                     send(fds[i].fd, response.c_str(), response.size() + 1, 0);
                 }
