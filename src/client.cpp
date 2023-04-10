@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cstring>
+#include <poll.h>
 
 constexpr int PORT = 8080;
 
@@ -29,6 +30,35 @@ std::string get_nickname() {
     return nickname;
 }
 
+void game_loop(int client_fd) {
+    pollfd client_pollfd;
+    client_pollfd.fd = client_fd;
+    client_pollfd.events = POLLIN;
+
+    while (true) {
+        poll(&client_pollfd, 1, -1);
+
+        if (client_pollfd.revents & POLLIN) {
+            char buffer[1024];
+            ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+            buffer[bytes_received] = '\0';
+            std::string message(buffer);
+
+            if (message.find("it's your turn!") != std::string::npos) {
+                std::cout << message << std::endl;
+
+                char answer;
+                std::cout << "Enter your answer (A/B/C/D) or 'S' to skip: ";
+                std::cin >> answer;
+                answer = std::toupper(answer); // Convert answer to uppercase
+                send(client_fd, &answer, sizeof(answer), 0);
+            } else {
+                std::cout << message << std::endl;
+            }
+        }
+    }
+}
+
 int main() {
     int client_fd = create_client_socket();
     std::string nickname = get_nickname();
@@ -36,8 +66,6 @@ int main() {
     
     if (bytes_sent < 0) {
         perror("send");
-    } else {
-        std::cout << "Sent " << bytes_sent << " bytes." << std::endl;
     }
 
     char buffer[1024];
@@ -53,8 +81,10 @@ int main() {
             if (response == "Nickname already exists. Please choose another nickname.") {
                 nickname = get_nickname();
                 send(client_fd, nickname.c_str(), nickname.size() + 1, 0);
-            } 
-            // else if (response == "GAME START!!!") {}
+            } else if (response.find("Game Information:") != std::string::npos) {
+                game_loop(client_fd);
+                break;
+            }
         } else if (bytes_received == 0) {
             // If recv returns 0, it means that the server closed the connection.
             break;
@@ -68,4 +98,3 @@ int main() {
     close(client_fd);
     return 0;
 }
-

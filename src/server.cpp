@@ -131,6 +131,55 @@ std::vector<Question> load_questions(const std::string& filename, int num_player
     return std::vector<Question>(all_questions.begin(), all_questions.begin() + num_questions);
 }
 
+void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
+    size_t current_question_index = 0;
+    size_t current_player_index = 0;
+    
+    while (current_question_index < game_state.questions.size()) {
+        const Question& current_question = game_state.questions[current_question_index];
+        Player& current_player = game_state.players[current_player_index];
+
+        if (current_player.get_is_active()) {
+            // Send the question to the current player
+            std::string question_message = "Player \"" + current_player.get_nickname() + "\", it's your turn!\n";
+            question_message += current_question.get_question_text() + "\n";
+            for (size_t i = 0; i < current_question.get_choices().size(); ++i) {
+                question_message += std::string(1, static_cast<char>('A' + i)) + ". " + current_question.get_choices()[i] + "\n";
+            }
+            send(fds[current_player_index + 1].fd, question_message.c_str(), question_message.size() + 1, 0);
+
+            // Wait for the current player's answer
+            pollfd current_player_pollfd = fds[current_player_index + 1];
+            poll(&current_player_pollfd, 1, -1);
+
+            if (current_player_pollfd.revents & POLLIN) {
+                char answer;
+                recv(current_player_pollfd.fd, &answer, sizeof(answer), 0);
+                if (answer == 'S') { // Player chose to skip their turn
+                    if (!current_player.get_has_skipped()) {
+                        current_player.set_has_skipped(true);
+                    } else {
+                        // Handle case where player tries to skip their turn more than once
+                    }
+                } else {
+                    int answer_index = answer - 'A';
+                    if (answer_index == current_question.get_correct_choice_index()) {
+                        // Correct answer
+                        current_question_index++;
+                    } else {
+                        // Incorrect answer
+                        current_player.set_is_active(false);
+                    }
+                }
+            }
+        }
+
+        // Move to the next player
+        current_player_index = (current_player_index + 1) % game_state.players.size();
+    }
+}
+
+
 int main() {
     int server_fd = create_server_socket();
     sockaddr_in client_addr;
@@ -169,10 +218,10 @@ int main() {
                     std::string message = get_client_info(nicknames, client_count);
                     if(client_count == required_players) {
                         std::vector<Question> questions = load_questions(filename, client_count);
-                        std::cout << questions.size() << '\n'; 
                         game_state = std::make_unique<GameState>(nicknames, questions);
 
                         send_game_info(fds, *game_state);
+                        game_loop(fds, *game_state); 
                     }
                     else {
                         message += "Waiting for more players to join.\n";
