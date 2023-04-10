@@ -9,6 +9,17 @@
 #include <cstring>
 #include <poll.h>
 #include <vector>
+#include <algorithm>
+#include <cstdlib>
+#include <ctime>
+#include <fstream>
+#include <iterator>
+#include <random>
+#include <memory> 
+
+#include "./components/question.h"
+#include "./components/game_state.h"
+#include "./components/player.h"
 
 constexpr int PORT = 8080;
 constexpr int BACKLOG = 10;
@@ -51,6 +62,19 @@ void broadcast_to_clients(const std::vector<pollfd>& fds, const std::string& mes
     }
 }
 
+void send_game_info(const std::vector<pollfd>& fds, const GameState& game_state) {
+    std::string message = "Game Information:\n";
+    message += "Number of players: " + std::to_string(game_state.players.size()) + "\n";
+    message += "Players' order:";
+    for (size_t i = 0; i < game_state.players.size(); ++i) {
+        message += "\n" + std::to_string(i + 1) + ". " + game_state.players[i].get_nickname();
+    }
+    message += "\nNumber of questions in this set: " + std::to_string(game_state.questions.size()) + "\n";
+    message += "THE GAME STARTS NOW!\n";
+    broadcast_to_clients(fds, message);
+}
+
+
 std::string get_client_info(const std::unordered_set<std::string>& nicknames, int client_count) {
     std::string client_info = "Current number of clients: " + std::to_string(client_count) + "\n";
     client_info += "Client nicknames: ";
@@ -70,6 +94,43 @@ int max_number_of_players() {
     return players;
 }
 
+std::vector<Question> load_questions(const std::string& filename, int num_players) {
+    std::vector<Question> all_questions;
+    std::ifstream file(filename);
+
+    if (file.is_open()) {
+        std::string question_text, choice, blank_line;
+        std::vector<std::string> choices;
+        char correct_choice;
+
+        while (std::getline(file, question_text)) {
+            for (int i = 0; i < 4; ++i) {
+                std::getline(file, choice);
+                choices.push_back(choice.substr(2));
+            }
+            std::getline(file, choice); // Read the correct_choice line after the choices loop
+            correct_choice = choice[0];
+            std::getline(file, blank_line); // Read the blank line after the correct_choice line
+
+            int correct_choice_index = correct_choice - 'A';
+            all_questions.emplace_back(question_text, choices, correct_choice_index);
+            choices.clear();
+        }
+        file.close();
+    } else {
+        std::cerr << "Unable to open file " << filename << std::endl;
+    }
+
+    int num_questions = num_players * 3;
+    if (num_questions >= all_questions.size()) {
+        return all_questions;
+    }
+
+    std::shuffle(all_questions.begin(), all_questions.end(), std::default_random_engine(std::random_device{}()));
+
+    return std::vector<Question>(all_questions.begin(), all_questions.begin() + num_questions);
+}
+
 int main() {
     int server_fd = create_server_socket();
     sockaddr_in client_addr;
@@ -85,6 +146,8 @@ int main() {
     server_pollfd.events = POLLIN;
     fds.push_back(server_pollfd);
 
+    std::unique_ptr<GameState> game_state;
+    std::string filename = "../data/questions.txt"; 
     while (true) {
         poll(fds.data(), fds.size(), -1);
 
@@ -104,11 +167,18 @@ int main() {
                 std::string response = handle_client_registration(fds[i].fd, nicknames, client_count);
                 if (response == "Registration Completed Successfully. Number of clients: " + std::to_string(client_count)) {
                     std::string message = get_client_info(nicknames, client_count);
-                    if(client_count == required_players)
-                        message += "All players have joined. Game will start soon.\n";
-                    else
+                    if(client_count == required_players) {
+                        std::vector<Question> questions = load_questions(filename, client_count);
+                        std::cout << questions.size() << '\n'; 
+                        game_state = std::make_unique<GameState>(nicknames, questions);
+
+                        send_game_info(fds, *game_state);
+                    }
+                    else {
                         message += "Waiting for more players to join.\n";
-                    broadcast_to_clients(fds, message);
+                        broadcast_to_clients(fds, message);
+                    }
+                        
                 } else {
                     send(fds[i].fd, response.c_str(), response.size() + 1, 0);
                 }

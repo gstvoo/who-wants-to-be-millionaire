@@ -63,6 +63,13 @@
         "chrono": "cpp",
         "compare": "cpp",
         "concepts": "cpp",
-        "algorithm": "cpp"
+        "algorithm": "cpp",
+        "fstream": "cpp",
+        "deque": "cpp",
+        "iomanip": "cpp",
+        "stack": "cpp",
+        "numeric": "cpp",
+        "random": "cpp",
+        "filesystem": "cpp"
     }
 }
