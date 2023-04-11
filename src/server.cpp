@@ -170,13 +170,17 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
                     }
                 } else {
                     int answer_index = answer - 'A';
+                    std::string response_message; 
                     if (answer_index == current_question.get_correct_choice_index()) {
                         // Correct answer
+                        response_message = "Correct!\n"; 
                         current_question_index++;
                     } else {
                         // Incorrect answer
+                        response_message = "Incorrect! You're disqualified.\n";
                         current_player.set_is_active(false);
                     }
+                    send(fds[current_player_index+1].fd, response_message.c_str(), response_message.size() + 1, 0);
                 }
             }
         }
