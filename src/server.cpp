@@ -148,12 +148,12 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
     
     bool all_questions_answered = false; 
 
-    for (size_t i = 0; i < game_state.players.size(); ++i) {
-        if (game_state.players[i].get_is_active()) {
-            current_player_index = i;
-            break;
-        }
-    }
+    // for (size_t i = 0; i < game_state.players.size(); ++i) {
+    //     if (game_state.players[i].get_is_active()) {
+    //         current_player_index = i;
+    //         break;
+    //     }
+    // }
 
     while (current_question_index < game_state.questions.size()) {
 
@@ -177,9 +177,9 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
 
             // Wait for the current player's answer
             pollfd current_player_pollfd = fds[current_player_index + 1];
-            poll(&current_player_pollfd, 1, -1);
+            int poll_result = poll(&current_player_pollfd, 1, 30000); //30 seconds timeout
 
-            if (current_player_pollfd.revents & POLLIN) {
+            if (poll_result > 0 && (current_player_pollfd.revents & POLLIN)) {
                 char answer;
                 recv(current_player_pollfd.fd, &answer, sizeof(answer), 0);
                 if (answer == 'S') { // Player chose to skip their turn
@@ -187,6 +187,9 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
                         current_player.set_has_skipped(true);
                     } else {
                         // Handle case where player tries to skip their turn more than once
+                        std::string response_message = "You've already skipped your turn. You're disqualified.\n";
+                        send(fds[current_player_index+1].fd, response_message.c_str(), response_message.size() + 1, 0);
+                        current_player.set_is_active(false);
                     }
                 } else {
                     int answer_index = answer - 'A';
@@ -208,6 +211,14 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
                     }
                     send(fds[current_player_index+1].fd, response_message.c_str(), response_message.size() + 1, 0);
                 }
+            } else if (poll_result == 0) {
+                // Handle case where player doesn't answer in time
+                std::string response_message = "YOU'RE DISQUALIFIED.\n";
+                send(fds[current_player_index+1].fd, response_message.c_str(), response_message.size() + 1, 0);
+                current_player.set_is_active(false);
+            } else {
+                // Handle case where poll() failed
+                std::cerr << "poll() failed" << std::endl;
             }
         }
 
