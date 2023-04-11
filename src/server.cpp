@@ -131,10 +131,23 @@ std::vector<Question> load_questions(const std::string& filename, int num_player
     return std::vector<Question>(all_questions.begin(), all_questions.begin() + num_questions);
 }
 
+size_t count_active_players(const std::vector<Player>& players) {
+    size_t active_players = 0;
+    for (const auto& player : players) {
+        if (player.get_is_active()) {
+            active_players++;
+        }
+    }
+    return active_players;
+}
+
+
 void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
     size_t current_question_index = 0;
     size_t current_player_index = 0;
     
+    bool all_questions_answered = false; 
+
     for (size_t i = 0; i < game_state.players.size(); ++i) {
         if (game_state.players[i].get_is_active()) {
             current_player_index = i;
@@ -143,6 +156,13 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
     }
 
     while (current_question_index < game_state.questions.size()) {
+
+        size_t active_players = count_active_players(game_state.players);
+        if (active_players <= 1) {
+            // The game is over
+            break;
+        }
+
         const Question& current_question = game_state.questions[current_question_index];
         Player& current_player = game_state.players[current_player_index];
 
@@ -175,6 +195,12 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
                         // Correct answer
                         response_message = "Correct!\n"; 
                         current_question_index++;
+                    
+                        if (current_question_index == game_state.questions.size()) {
+                            all_questions_answered = true; 
+                            break;    
+                        }
+
                     } else {
                         // Incorrect answer
                         response_message = "Incorrect! You're disqualified.\n";
@@ -187,6 +213,11 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
 
         // Move to the next player
         current_player_index = (current_player_index + 1) % game_state.players.size();
+    }
+
+    if (all_questions_answered) { // Check if the game ended with all questions answered correctly
+        std::string end_message = "Congratulations to all players! You all are winners!\n";
+        broadcast_to_clients(fds, end_message);
     }
 }
 
@@ -234,6 +265,21 @@ int main() {
 
                         send_game_info(fds, *game_state);
                         game_loop(fds, *game_state); 
+                        // Declare the winner(s) after the game loop
+                        size_t active_players = count_active_players(game_state->players);
+                        std::string end_message;
+                        if (active_players <= 1) {
+                            for (const auto& player : game_state->players) {
+                                if (player.get_is_active()) {
+                                    end_message = "Congratulations, \"" + player.get_nickname() + "\"! You are the winner!\n";
+                                    broadcast_to_clients(fds, end_message);
+                                    break;
+                                }
+                            }
+                        } else {
+                            break; 
+                        }
+    
                     }
                     else {
                         message += "Waiting for more players to join.\n";
