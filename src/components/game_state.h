@@ -8,7 +8,7 @@
 
 class GameState {
 public:
-    GameState(const std::unordered_set<std::string>& player_names, const std::vector<Question>& questions)
+    GameState(const std::vector<std::string>& player_names, const std::vector<Question>& questions)
         : players(create_players(player_names)), questions(questions), current_question_index(0) {}
 
     std::vector<Player> players;
@@ -21,7 +21,7 @@ public:
     // }
 
 private:
-    std::vector<Player> create_players(const std::unordered_set<std::string>& player_names) {
+    std::vector<Player> create_players(const std::vector<std::string>& player_names) {
         std::vector<Player> temp_players;
         for (const auto& name : player_names) {
             temp_players.emplace_back(name, true, false);

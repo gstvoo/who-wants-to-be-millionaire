@@ -41,14 +41,14 @@ int create_server_socket() {
     return server_fd;
 }
 
-std::string handle_client_registration(int client_fd, std::unordered_set<std::string>& nicknames, int& client_count) {
+std::string handle_client_registration(int client_fd, std::vector<std::string>& nicknames, int& client_count) {
     char buffer[1024];
     ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     buffer[bytes_received] = '\0';
 
     std::string nickname(buffer);
-    if (nicknames.find(nickname) == nicknames.end()) {
-        nicknames.insert(nickname);
+    if (std::find(nicknames.begin(), nicknames.end(), nickname) == nicknames.end()) {
+        nicknames.push_back(nickname);
         client_count++;
         return "Registration Completed Successfully. Number of clients: " + std::to_string(client_count);
     } else {
@@ -75,7 +75,7 @@ void send_game_info(const std::vector<pollfd>& fds, const GameState& game_state)
 }
 
 
-std::string get_client_info(const std::unordered_set<std::string>& nicknames, int client_count) {
+std::string get_client_info(const std::vector<std::string>& nicknames, int client_count) {
     std::string client_info = "Current number of clients: " + std::to_string(client_count) + "\n";
     client_info += "Client nicknames: ";
 
@@ -135,6 +135,13 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
     size_t current_question_index = 0;
     size_t current_player_index = 0;
     
+    for (size_t i = 0; i < game_state.players.size(); ++i) {
+        if (game_state.players[i].get_is_active()) {
+            current_player_index = i;
+            break;
+        }
+    }
+
     while (current_question_index < game_state.questions.size()) {
         const Question& current_question = game_state.questions[current_question_index];
         Player& current_player = game_state.players[current_player_index];
@@ -185,7 +192,8 @@ int main() {
     sockaddr_in client_addr;
     socklen_t addr_len = sizeof(client_addr);
 
-    std::unordered_set<std::string> nicknames;
+    // std::unordered_set<std::string> nicknames;
+    std::vector<std::string> nicknames; 
     int client_count = 0;
     int required_players = max_number_of_players(); 
 
