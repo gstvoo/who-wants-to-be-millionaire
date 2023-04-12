@@ -218,7 +218,7 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
                 }
             } else if (poll_result == 0) {
                 // Handle case where player doesn't answer in time
-                std::string response_message = "TIME'S UP! YOU'RE DISQUALIFIED.\n";
+                std::string response_message = "\nTIME'S UP! YOU'RE DISQUALIFIED.\n";
                 send(fds[current_player_index+1].fd, response_message.c_str(), response_message.size() + 1, 0);
                 current_player.set_is_active(false);
             } else {

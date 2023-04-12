@@ -5,8 +5,12 @@
 #include <unistd.h>
 #include <cstring>
 #include <poll.h>
+#include <thread>
+#include <atomic>
 
 constexpr int PORT = 8080;
+
+std::atomic<bool> waiting_for_answer(false);
 
 int create_client_socket() {
     int client_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -30,34 +34,71 @@ std::string get_nickname() {
     return nickname;
 }
 
-void game_loop(int client_fd) {
-    pollfd client_pollfd;
-    client_pollfd.fd = client_fd;
-    client_pollfd.events = POLLIN;
-
+void handle_user_input(int client_fd) {
     while (true) {
-        poll(&client_pollfd, 1, -1);
-
-        if (client_pollfd.revents & POLLIN) {
-            char buffer[1024];
-            ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-            buffer[bytes_received] = '\0';
-            std::string message(buffer);
-
-            if (message.find("it's your turn!") != std::string::npos) {
-                std::cout << message << std::endl;
-
-                char answer;
-                std::cout << "Enter your answer (A/B/C/D) or 'S' to skip: ";
-                std::cin >> answer;
-                answer = std::toupper(answer); // Convert answer to uppercase
-                send(client_fd, &answer, sizeof(answer), 0);
-            } else {
-                std::cout << message << std::endl;
-            }
+        if (waiting_for_answer) {
+            char answer;
+            std::cout << "Enter your answer (A/B/C/D) or 'S' to skip: ";
+            std::cin >> answer;
+            answer = std::toupper(answer); // Convert answer to uppercase
+            send(client_fd, &answer, sizeof(answer), 0);
+            waiting_for_answer = false;
         }
     }
 }
+
+void game_loop(int client_fd) {
+    std::thread user_input_thread(handle_user_input, client_fd);
+
+    while (true) {
+        char buffer[1024];
+        ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+        buffer[bytes_received] = '\0';
+        std::string message(buffer);
+
+        if (message.find("it's your turn!") != std::string::npos) {
+            std::cout << message << std::endl;
+            waiting_for_answer = true;
+        } else {
+            std::cout << message << std::endl;
+            if (message.find("TIME'S UP") != std::string::npos) {
+                waiting_for_answer = false;
+            }
+        }
+    }
+
+    user_input_thread.join();
+}
+
+
+// void game_loop(int client_fd) {
+//     pollfd client_pollfd;
+//     client_pollfd.fd = client_fd;
+//     client_pollfd.events = POLLIN;
+
+//     while (true) {
+//         poll(&client_pollfd, 1, -1);
+
+//         if (client_pollfd.revents & POLLIN) {
+//             char buffer[1024];
+//             ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+//             buffer[bytes_received] = '\0';
+//             std::string message(buffer);
+
+//             if (message.find("it's your turn!") != std::string::npos) {
+//                 std::cout << message << std::endl;
+
+//                 char answer;
+//                 std::cout << "Enter your answer (A/B/C/D) or 'S' to skip: ";
+//                 std::cin >> answer;
+//                 answer = std::toupper(answer); // Convert answer to uppercase
+//                 send(client_fd, &answer, sizeof(answer), 0);
+//             } else {
+//                 std::cout << message << std::endl;
+//             }
+//         }
+//     }
+// }
 
 int main() {
     int client_fd = create_client_socket();
