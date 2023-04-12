@@ -63,13 +63,18 @@ void broadcast_to_clients(const std::vector<pollfd>& fds, const std::string& mes
 }
 
 void send_game_info(const std::vector<pollfd>& fds, const GameState& game_state) {
-    std::string message = "Game Information:\n";
+    std::string message = "GAME INFORMATION --------------------\n";
     message += "Number of players: " + std::to_string(game_state.players.size()) + "\n";
     message += "Players' order:";
     for (size_t i = 0; i < game_state.players.size(); ++i) {
         message += "\n" + std::to_string(i + 1) + ". " + game_state.players[i].get_nickname();
     }
     message += "\nNumber of questions in this set: " + std::to_string(game_state.questions.size()) + "\n";
+    message += "GAME RULES ------------------------\n";
+    message += "1.Each player will have 30s to answer the answer.\n";
+    message += "2.Each player have 1 skip chance.\n";
+    message += "3.Game ends when there's only 1 player left or all of the questions have been answered.\n";
+    message += "----------------------------------\n";
     message += "THE GAME STARTS NOW!\n";
     broadcast_to_clients(fds, message);
 }
@@ -187,7 +192,7 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
                         current_player.set_has_skipped(true);
                     } else {
                         // Handle case where player tries to skip their turn more than once
-                        std::string response_message = "You've already skipped your turn. You're disqualified.\n";
+                        std::string response_message = "YOU'VE ALREADY SKIPPED YOUR TURN. YOU'RE DISQUALIFIED\n";
                         send(fds[current_player_index+1].fd, response_message.c_str(), response_message.size() + 1, 0);
                         current_player.set_is_active(false);
                     }
@@ -196,7 +201,7 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
                     std::string response_message; 
                     if (answer_index == current_question.get_correct_choice_index()) {
                         // Correct answer
-                        response_message = "Correct!\n"; 
+                        response_message = "CORRECT!\n"; 
                         current_question_index++;
                     
                         if (current_question_index == game_state.questions.size()) {
@@ -206,14 +211,14 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
 
                     } else {
                         // Incorrect answer
-                        response_message = "Incorrect! You're disqualified.\n";
+                        response_message = "INCORREECT! YOU'RE DISQUALIFIED.\n";
                         current_player.set_is_active(false);
                     }
                     send(fds[current_player_index+1].fd, response_message.c_str(), response_message.size() + 1, 0);
                 }
             } else if (poll_result == 0) {
                 // Handle case where player doesn't answer in time
-                std::string response_message = "YOU'RE DISQUALIFIED.\n";
+                std::string response_message = "TIME'S UP! YOU'RE DISQUALIFIED.\n";
                 send(fds[current_player_index+1].fd, response_message.c_str(), response_message.size() + 1, 0);
                 current_player.set_is_active(false);
             } else {
@@ -282,7 +287,7 @@ int main() {
                         if (active_players <= 1) {
                             for (const auto& player : game_state->players) {
                                 if (player.get_is_active()) {
-                                    end_message = "Congratulations, \"" + player.get_nickname() + "\"! You are the winner!\n";
+                                    end_message = "\nCongratulations, \"" + player.get_nickname() + "\"! You are the winner!\n";
                                     broadcast_to_clients(fds, end_message);
                                     break;
                                 }

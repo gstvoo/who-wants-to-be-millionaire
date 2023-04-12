@@ -81,7 +81,7 @@ int main() {
             if (response == "Nickname already exists. Please choose another nickname.") {
                 nickname = get_nickname();
                 send(client_fd, nickname.c_str(), nickname.size() + 1, 0);
-            } else if (response.find("Game Information:") != std::string::npos) {
+            } else if (response.find("GAME INFORMATION") != std::string::npos) {
                 game_loop(client_fd);
                 break;
             }
