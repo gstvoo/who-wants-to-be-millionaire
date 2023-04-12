@@ -93,9 +93,13 @@ std::string get_client_info(const std::vector<std::string>& nicknames, int clien
 }
 
 int max_number_of_players() {
-    std::cout << "Enter the number of players: "; 
+    std::cout << "Enter the number of players (2 to 10): "; 
     int players;
     std::cin >> players;
+    while (players < 2 || players > 10) {
+        std::cout << "Invalid number of players.\nEnter the number of players (2 to 10): ";
+        std::cin >> players;
+    }
     return players;
 }
 
@@ -152,13 +156,6 @@ void game_loop(const std::vector<pollfd>& fds, GameState& game_state) {
     size_t current_player_index = 0;
     
     bool all_questions_answered = false; 
-
-    // for (size_t i = 0; i < game_state.players.size(); ++i) {
-    //     if (game_state.players[i].get_is_active()) {
-    //         current_player_index = i;
-    //         break;
-    //     }
-    // }
 
     while (current_question_index < game_state.questions.size()) {
 
@@ -276,6 +273,9 @@ int main() {
                 if (response == "Registration Completed Successfully. Number of clients: " + std::to_string(client_count)) {
                     std::string message = get_client_info(nicknames, client_count);
                     if(client_count == required_players) {
+                        std::string message = get_client_info(nicknames, client_count); 
+                        broadcast_to_clients(fds, message);
+
                         std::vector<Question> questions = load_questions(filename, client_count);
                         game_state = std::make_unique<GameState>(nicknames, questions);
 

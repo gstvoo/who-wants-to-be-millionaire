@@ -27,6 +27,20 @@ int create_client_socket() {
     return client_fd;
 }
 
+bool valid_nickname(std::string nickname) { 
+    if (nickname.size() < 3 || nickname.size() > 10) {
+        return false;
+    }
+
+    for (char c : nickname) {
+        if (!(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_')) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 std::string get_nickname() {
     std::string nickname;
     std::cout << "Enter your nickname: ";
@@ -103,6 +117,10 @@ void game_loop(int client_fd) {
 int main() {
     int client_fd = create_client_socket();
     std::string nickname = get_nickname();
+    while(!valid_nickname(nickname)) {
+        std::cout << "Invalid nickname.\n1. Your nickname is composed by the following characters 'a'...'z', 'A'...'Z', '0'...'9' and '_'.\n2. The length of your nickname is between 3 and 10.\nPlease choose again.\n";
+        nickname = get_nickname();
+    }
     ssize_t bytes_sent = send(client_fd, nickname.c_str(), nickname.size() + 1, 0);
     
     if (bytes_sent < 0) {
@@ -121,6 +139,10 @@ int main() {
 
             if (response == "Nickname already exists. Please choose another nickname.") {
                 nickname = get_nickname();
+                while(!valid_nickname(nickname)) {
+                    std::cout << "Invalid nickname.\n1. Your nickname is composed by the following characters 'a'...'z', 'A'...'Z', '0'...'9' and '_'.\n2. The length of your nickname is between 3 and 10.\nPlease choose again.\n";
+                    nickname = get_nickname();
+                }
                 send(client_fd, nickname.c_str(), nickname.size() + 1, 0);
             } else if (response.find("GAME INFORMATION") != std::string::npos) {
                 game_loop(client_fd);
